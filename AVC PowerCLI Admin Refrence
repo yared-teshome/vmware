@@ -1,0 +1,436 @@
+<#
+.SYNOPSIS
+    VCF PowerCLI Administration Reference
+
+.DESCRIPTION
+    Administrative command reference for common VMware vSphere / VMware
+    Cloud Foundation operations using PowerCLI.
+
+    The reference includes examples for:
+    - PowerCLI installation and module verification
+    - vCenter Server connectivity
+    - Virtual machine inventory
+    - VM power state
+    - VM hardware information
+    - Guest operating system information
+    - VM snapshots
+    - Virtual disks
+    - Network adapters
+    - Datastores
+    - ESXi hosts
+    - Clusters
+    - Resource pools
+    - CPU and memory performance statistics
+    - Recent tasks
+    - Power operations
+    - vCenter Server disconnection
+
+    Commands are separated into READ-ONLY and CHANGE sections.
+
+.NOTES
+    Project:
+        VCF PowerCLI Administration Reference
+
+    Version:
+        1.0.0
+
+    Maintainer:
+        Systems Administration
+
+    IMPORTANT:
+        Review all CHANGE commands before execution.
+
+        This reference contains both read-only information-gathering commands
+        and commands capable of changing virtual machine state.
+
+        Replace example server, VM, cluster, and datastore names before use.
+
+    Current Product Naming:
+        VMware PowerCLI has transitioned to VCF PowerCLI.
+
+    Last Reviewed:
+        2026-09-30
+#>
+
+# =================================================================================================
+# CONFIGURATION
+# =================================================================================================
+
+$vCenterServer = "vcenter.example.local"
+$VMName = "VirtualMachineName"
+$VMHostName = "ESXiHostName"
+$ClusterName = "ClusterName"
+$DatastoreName = "DatastoreName"
+
+# =================================================================================================
+# MODULE INSTALLATION
+# =================================================================================================
+# CHANGE - Installs the module for the current user.
+#
+# Current Broadcom module:
+# Install-Module -Name VCF.PowerCLI -Scope CurrentUser
+#
+# Legacy environments may still contain:
+# Install-Module -Name VMware.PowerCLI -Scope CurrentUser
+
+# Verify installed PowerCLI modules
+Get-Module -Name VCF.PowerCLI -ListAvailable
+
+# List available VMware/VCF-related modules
+Get-Module -ListAvailable |
+    Where-Object {
+        ($_.Name -like "VCF*") -or
+        ($_.Name -like "VMware*")
+    } |
+    Sort-Object Name, Version |
+    Select-Object Name, Version, Path
+
+# =================================================================================================
+# CONNECT TO VCENTER
+# =================================================================================================
+
+# Recommended interactive credential prompt.
+# Avoid storing passwords directly in the script.
+$Credential = Get-Credential
+
+Connect-VIServer -Server $vCenterServer -Credential $Credential
+
+# Show current vCenter connections
+$global:DefaultVIServers |
+    Select-Object Name, User, IsConnected
+
+# =================================================================================================
+# READ-ONLY - VCENTER INFORMATION
+# =================================================================================================
+
+Get-VIServer
+
+# =================================================================================================
+# READ-ONLY - VM INVENTORY
+# =================================================================================================
+
+# All virtual machines
+Get-VM |
+    Sort-Object Name |
+    Select-Object Name, PowerState, NumCpu, MemoryGB
+
+# Specific VM
+Get-VM -Name $VMName |
+    Format-List *
+
+# Basic VM configuration
+Get-VM -Name $VMName |
+    Select-Object Name,
+                  PowerState,
+                  NumCpu,
+                  MemoryGB,
+                  VMHost,
+                  Folder,
+                  ResourcePool
+
+# Powered-on VMs
+Get-VM |
+    Where-Object {
+        $_.PowerState -eq "PoweredOn"
+    } |
+    Sort-Object Name
+
+# Powered-off VMs
+Get-VM |
+    Where-Object {
+        $_.PowerState -eq "PoweredOff"
+    } |
+    Sort-Object Name
+
+# =================================================================================================
+# READ-ONLY - GUEST OPERATING SYSTEM INFORMATION
+# =================================================================================================
+
+Get-VM -Name $VMName |
+    Get-VMGuest |
+    Select-Object VM, OSFullName, HostName, IPAddress, State
+
+# All VM guest information
+Get-VM |
+    Get-VMGuest |
+    Select-Object VM, HostName, OSFullName, IPAddress, State
+
+# =================================================================================================
+# READ-ONLY - VM HARD DISKS
+# =================================================================================================
+
+Get-VM -Name $VMName |
+    Get-HardDisk |
+    Select-Object Parent, Name, CapacityGB, StorageFormat, Filename
+
+# All VM virtual disks
+Get-VM |
+    Get-HardDisk |
+    Select-Object Parent, Name, CapacityGB, StorageFormat, Filename
+
+# =================================================================================================
+# READ-ONLY - VM NETWORK ADAPTERS
+# =================================================================================================
+
+Get-VM -Name $VMName |
+    Get-NetworkAdapter |
+    Select-Object Parent, Name, Type, NetworkName, MacAddress, ConnectionState
+
+# =================================================================================================
+# READ-ONLY - VM CD/DVD DEVICES
+# =================================================================================================
+
+Get-VM -Name $VMName |
+    Get-CDDrive |
+    Select-Object Parent, Name, IsoPath, HostDevice, RemoteDevice
+
+# =================================================================================================
+# READ-ONLY - VM SNAPSHOTS
+# =================================================================================================
+
+Get-VM -Name $VMName |
+    Get-Snapshot |
+    Sort-Object Created |
+    Select-Object VM, Name, Description, Created, SizeGB
+
+# All snapshots in the connected environment
+Get-VM |
+    Get-Snapshot |
+    Sort-Object Created |
+    Select-Object VM, Name, Description, Created, SizeGB
+
+# =================================================================================================
+# READ-ONLY - ESXI HOST INVENTORY
+# =================================================================================================
+
+Get-VMHost |
+    Sort-Object Name |
+    Select-Object Name,
+                  ConnectionState,
+                  PowerState,
+                  Manufacturer,
+                  Model,
+                  Version,
+                  Build,
+                  ProcessorType,
+                  NumCpu,
+                  MemoryTotalGB
+
+# Specific ESXi host
+Get-VMHost -Name $VMHostName |
+    Format-List *
+
+# =================================================================================================
+# READ-ONLY - CLUSTERS
+# =================================================================================================
+
+Get-Cluster |
+    Sort-Object Name |
+    Select-Object Name, HAEnabled, DrsEnabled, DrsAutomationLevel
+
+# Specific cluster
+Get-Cluster -Name $ClusterName |
+    Format-List *
+
+# VMs in a cluster
+Get-Cluster -Name $ClusterName |
+    Get-VM |
+    Select-Object Name, PowerState, NumCpu, MemoryGB, VMHost
+
+# Hosts in a cluster
+Get-Cluster -Name $ClusterName |
+    Get-VMHost |
+    Select-Object Name, ConnectionState, PowerState, Version, Build
+
+# =================================================================================================
+# READ-ONLY - RESOURCE POOLS
+# =================================================================================================
+
+Get-ResourcePool |
+    Sort-Object Name |
+    Select-Object Name, CpuLimitMHz, MemLimitMB
+
+# =================================================================================================
+# READ-ONLY - DATASTORES
+# =================================================================================================
+
+Get-Datastore |
+    Sort-Object Name |
+    Select-Object Name,
+                  Type,
+                  CapacityGB,
+                  FreeSpaceGB
+
+# Specific datastore
+Get-Datastore -Name $DatastoreName |
+    Format-List *
+
+# Datastores visible to a specific host
+Get-VMHost -Name $VMHostName |
+    Get-Datastore |
+    Select-Object Name, Type, CapacityGB, FreeSpaceGB
+
+# =================================================================================================
+# READ-ONLY - VM PERFORMANCE
+# =================================================================================================
+
+$VM = Get-VM -Name $VMName
+
+# CPU usage - previous hour
+Get-Stat -Entity $VM `
+         -Stat "cpu.usage.average" `
+         -Start (Get-Date).AddHours(-1) `
+         -IntervalMins 5 |
+    Select-Object Timestamp, MetricId, Value, Unit
+
+# Memory usage - previous hour
+Get-Stat -Entity $VM `
+         -Stat "mem.usage.average" `
+         -Start (Get-Date).AddHours(-1) `
+         -IntervalMins 5 |
+    Select-Object Timestamp, MetricId, Value, Unit
+
+# CPU and memory together
+Get-Stat -Entity $VM `
+         -Stat "cpu.usage.average","mem.usage.average" `
+         -Start (Get-Date).AddHours(-1) `
+         -IntervalMins 5 |
+    Select-Object Timestamp, MetricId, Value, Unit
+
+# Common CPU statistics
+Get-Stat -Entity $VM `
+         -Cpu `
+         -Start (Get-Date).AddHours(-1) `
+         -IntervalMins 5
+
+# Common memory statistics
+Get-Stat -Entity $VM `
+         -Memory `
+         -Start (Get-Date).AddHours(-1) `
+         -IntervalMins 5
+
+# =================================================================================================
+# READ-ONLY - RECENT TASKS
+# =================================================================================================
+
+Get-Task |
+    Select-Object Name,
+                  State,
+                  StartTime,
+                  FinishTime,
+                  PercentComplete,
+                  Description
+
+# Failed tasks
+Get-Task -Status Error |
+    Select-Object Name,
+                  State,
+                  StartTime,
+                  FinishTime,
+                  Description
+
+# Running tasks
+Get-Task -Status Running |
+    Select-Object Name,
+                  State,
+                  StartTime,
+                  PercentComplete,
+                  Description
+
+# =================================================================================================
+# READ-ONLY - USEFUL TARGETED LOOKUPS
+# =================================================================================================
+
+# Determine the ESXi host currently running a VM
+Get-VM -Name $VMName |
+    Select-Object Name, VMHost
+
+# Determine where VM disks reside
+Get-VM -Name $VMName |
+    Get-HardDisk |
+    Select-Object Parent, Name, CapacityGB, Filename
+
+# Determine VM network configuration
+Get-VM -Name $VMName |
+    Get-NetworkAdapter |
+    Select-Object Parent, Name, NetworkName, MacAddress, ConnectionState
+
+# Determine VM guest IP information
+Get-VM -Name $VMName |
+    Get-VMGuest |
+    Select-Object VM, HostName, IPAddress, State
+
+# =================================================================================================
+# CHANGE COMMANDS
+# =================================================================================================
+#
+# WARNING:
+# Commands below can change VM state.
+#
+# Review the target object before executing a change.
+#
+# Recommended:
+#
+# $TargetVM = Get-VM -Name $VMName
+# $TargetVM
+#
+# Confirm that the correct VM was returned before continuing.
+# =================================================================================================
+
+# START VM
+# $TargetVM = Get-VM -Name $VMName
+# Start-VM -VM $TargetVM -Confirm:$true
+
+
+# STOP VM - GRACEFUL GUEST OPERATING SYSTEM SHUTDOWN
+#
+# Requires a guest/tools state that supports guest shutdown.
+#
+# $TargetVM = Get-VM -Name $VMName
+# Stop-VMGuest -VM $TargetVM -Confirm:$true
+
+
+# STOP VM - VIRTUAL POWER OFF
+#
+# This is different from requesting a graceful guest OS shutdown.
+# Use deliberately.
+#
+# $TargetVM = Get-VM -Name $VMName
+# Stop-VM -VM $TargetVM -Confirm:$true
+
+
+# RESTART GUEST OPERATING SYSTEM
+#
+# $TargetVM = Get-VM -Name $VMName
+# Restart-VMGuest -VM $TargetVM -Confirm:$true
+
+
+# =================================================================================================
+# COMMAND DISCOVERY
+# =================================================================================================
+
+# PowerCLI commands
+Get-Command -Module VMware.VimAutomation.Core |
+    Sort-Object Name
+
+# Find VM-related commands
+Get-Command -Module VMware.VimAutomation.Core |
+    Where-Object {
+        $_.Name -match "VM"
+    } |
+    Sort-Object Name
+
+# Built-in PowerShell help for a PowerCLI command
+Get-Help Get-VM -Full
+
+Get-Help Get-Stat -Full
+
+Get-Help Get-VMHost -Full
+
+Get-Help Get-Datastore -Full
+
+# =================================================================================================
+# DISCONNECT FROM VCENTER
+# =================================================================================================
+
+Disconnect-VIServer -Server $vCenterServer -Confirm:$true
